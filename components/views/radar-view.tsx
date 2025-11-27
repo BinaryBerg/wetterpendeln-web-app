@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Slider } from "@/components/ui/slider"
-import { MapPin, Navigation, Loader2, Play, Pause, SkipBack, SkipForward, Clock, AlertCircle, Crosshair } from "lucide-react"
+import { MapPin, Loader2, Play, Pause, SkipBack, SkipForward, Clock, AlertCircle, Crosshair } from "lucide-react"
 import { useLocationStore } from "@/lib/location-store"
 import type { Settings } from "@/lib/types"
 
@@ -13,7 +13,7 @@ interface RadarViewProps {
 }
 
 const RAINVIEWER_API = "https://api.rainviewer.com/public/weather-maps.json"
-const DEFAULT_CENTER = { lat: 51.1657, lon: 10.4515 } // Germany center
+const DEFAULT_CENTER = { lat: 52.0167, lon: 8.7 } // Leopoldshoehe
 
 interface RainViewerData {
   radar: {
@@ -102,11 +102,8 @@ export function RadarView({ settings }: RadarViewProps) {
     return "Aktuelle Radardaten"
   }
 
-  const getTileCoords = (lat: number, lon: number, zoom: number) => {
-    const x = Math.floor(((lon + 180) / 360) * Math.pow(2, zoom))
-    const y = Math.floor(((1 - Math.log(Math.tan((lat * Math.PI) / 180) + 1 / Math.cos((lat * Math.PI) / 180)) / Math.PI) / 2) * Math.pow(2, zoom))
-    return { x, y }
-  }
+  // Windy embed URL with radar overlay
+  const windyUrl = `https://embed.windy.com/embed2.html?lat=${currentCenter.lat}&lon=${currentCenter.lon}&detailLat=${currentCenter.lat}&detailLon=${currentCenter.lon}&width=650&height=450&zoom=9&level=surface&overlay=radar&product=radar&menu=&message=true&marker=true&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=km%2Fh&metricTemp=%C2%B0C&radarRange=-1`
 
   if (loading) {
     return (
@@ -116,19 +113,16 @@ export function RadarView({ settings }: RadarViewProps) {
     )
   }
 
-  const zoom = 7
-  const tileCoords = getTileCoords(currentCenter.lat, currentCenter.lon, zoom)
-
   return (
     <div className="space-y-4 max-w-4xl mx-auto">
-      {/* Location Header with Center Button */}
+      {/* Location Header */}
       <Card className="bg-white/5 backdrop-blur-xl border-white/10">
         <CardContent className="pt-4 pb-4">
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-2 text-cyan-400 min-w-0">
               <MapPin className="h-5 w-5 flex-shrink-0" />
               <span className="font-medium truncate">
-                {location.cityLabel || "Standort w\u00e4hlen"}
+                {location.cityLabel || "Standort waehlen"}
               </span>
             </div>
             <Button
@@ -137,15 +131,13 @@ export function RadarView({ settings }: RadarViewProps) {
               variant="outline"
               size="sm"
               className="bg-cyan-500/10 border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/20 min-h-[44px] px-4"
-              aria-label="Radar auf aktuellen Standort zentrieren"
             >
               {gpsLoading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
                 <>
                   <Crosshair className="h-4 w-4 mr-2" />
-                  <span className="hidden sm:inline">Auf Standort zentrieren</span>
-                  <span className="sm:hidden">Zentrieren</span>
+                  <span>GPS</span>
                 </>
               )}
             </Button>
@@ -177,7 +169,7 @@ export function RadarView({ settings }: RadarViewProps) {
       <Card className="bg-white/5 backdrop-blur-xl border-white/10">
         <CardContent className="pt-3 pb-3">
           <p className="text-xs text-slate-400 mb-2 uppercase tracking-wide">Schnellauswahl</p>
-          <div className="flex flex-wrap gap-2" role="group" aria-label="Zeitauswahl">
+          <div className="flex flex-wrap gap-2">
             {[-30, 0, 30, 60].map((minutes) => (
               <Button
                 key={minutes}
@@ -198,41 +190,19 @@ export function RadarView({ settings }: RadarViewProps) {
         </CardContent>
       </Card>
 
-      {/* Radar Map - Mobile Optimized */}
+      {/* Windy Radar Map */}
       <Card className="bg-white/5 backdrop-blur-xl border-white/10 overflow-hidden">
         <CardContent className="p-0">
-          <div 
-            className="relative w-full bg-slate-900 touch-pan-x touch-pan-y"
-            style={{ height: "min(65vh, 500px)" }}
-          >
-            {/* Base Map Layer */}
-            <div
-              className="absolute inset-0 bg-cover bg-center opacity-60"
-              style={{
-                backgroundImage: `url(https://tile.openstreetmap.org/${zoom}/${tileCoords.x}/${tileCoords.y}.png)`,
-              }}
+          <div className="relative w-full" style={{ height: "min(65vh, 500px)" }}>
+            <iframe
+              src={windyUrl}
+              style={{ width: "100%", height: "100%", border: "none" }}
+              title="Windy Radar"
+              allowFullScreen
             />
-
-            {/* Radar Overlay */}
-            {currentFrameData && (
-              <img
-                src={`https://tilecache.rainviewer.com${currentFrameData.path}/256/${zoom}/${tileCoords.x}/${tileCoords.y}/2/1_1.png`}
-                alt="Regenradar"
-                className="absolute inset-0 w-full h-full object-cover mix-blend-screen"
-                onError={(e) => {
-                  e.currentTarget.style.display = "none"
-                }}
-              />
-            )}
-
-            {/* Center Marker */}
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10">
-              <div className="w-4 h-4 bg-cyan-500 rounded-full border-2 border-white shadow-lg animate-pulse" />
-            </div>
-
             {/* Time Overlay */}
             {currentFrameData && (
-              <div className="absolute top-3 right-3 bg-black/60 backdrop-blur-sm px-3 py-2 rounded-lg">
+              <div className="absolute top-3 right-3 bg-black/60 backdrop-blur-sm px-3 py-2 rounded-lg z-10">
                 <p className="text-white text-sm font-medium">
                   {formatFrameTime(currentFrameData.time)}
                   {currentFrame >= pastFrameCount && (
@@ -245,11 +215,11 @@ export function RadarView({ settings }: RadarViewProps) {
 
           {/* Legend */}
           <div className="p-3 border-t border-white/10 bg-white/5">
-            <p className="text-xs text-slate-400 mb-2">Niederschlagsintensit\u00e4t</p>
+            <p className="text-xs text-slate-400 mb-2">Niederschlagsintensitaet</p>
             <div className="flex items-center gap-1">
               <div className="flex-1 h-3 rounded-full overflow-hidden flex">
-                <div className="flex-1 bg-[#00f]" />
-                <div className="flex-1 bg-[#0f0]" />
+                <div className="flex-1 bg-[#88f]" />
+                <div className="flex-1 bg-[#4f4]" />
                 <div className="flex-1 bg-[#ff0]" />
                 <div className="flex-1 bg-[#f80]" />
                 <div className="flex-1 bg-[#f00]" />
@@ -271,7 +241,6 @@ export function RadarView({ settings }: RadarViewProps) {
                   size="sm"
                   onClick={() => setCurrentFrame(0)}
                   className="text-slate-400 hover:text-white min-h-[44px] min-w-[44px] p-0"
-                  aria-label="Zum Anfang"
                 >
                   <SkipBack className="h-5 w-5" />
                 </Button>
@@ -280,7 +249,6 @@ export function RadarView({ settings }: RadarViewProps) {
                   size="sm"
                   onClick={() => setIsPlaying(!isPlaying)}
                   className="text-slate-400 hover:text-white min-h-[44px] min-w-[44px] p-0"
-                  aria-label={isPlaying ? "Pause" : "Abspielen"}
                 >
                   {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
                 </Button>
@@ -289,7 +257,6 @@ export function RadarView({ settings }: RadarViewProps) {
                   size="sm"
                   onClick={() => setCurrentFrame(allFrames.length - 1)}
                   className="text-slate-400 hover:text-white min-h-[44px] min-w-[44px] p-0"
-                  aria-label="Zum Ende"
                 >
                   <SkipForward className="h-5 w-5" />
                 </Button>
@@ -300,7 +267,6 @@ export function RadarView({ settings }: RadarViewProps) {
                     max={allFrames.length - 1}
                     step={1}
                     className="w-full"
-                    aria-label="Zeitstrahl"
                   />
                 </div>
                 <span className="text-xs text-slate-400 min-w-[45px] text-right">
